@@ -1,0 +1,5344 @@
+openapi: 3.0.0
+info:
+  title: PostGhost API
+  description: |
+    PostGhost is a SaaS platform for reliability and observability of background workloads
+    (jobs, scripts, workers, and SDK-based API calls).
+  version: 1.0.0
+  contact:
+    name: PostGhost Team
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: PostGhost API
+  - url: https://api.postghost.dev/api/v1
+    description: Production server
+
+security: []
+
+paths:
+  /health:
+    get:
+      operationId: GetHealth
+      summary: Health check endpoint
+      description: Returns the health status of the API including timestamp and version information
+      tags:
+        - System
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /users/me:
+    get:
+      operationId: GetUserDetails
+      summary: Get current user information
+      description: |
+        Returns the authenticated user's information including full name, email, phone number, and account ID.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+      tags:
+        - Users
+      security:
+        - HumanJWT: []
+      responses:
+        '200':
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetailsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: Token does not have required scope
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      operationId: UpdateUserDetails
+      summary: Update current user information
+      description: |
+        Updates the authenticated user's information. Only provided fields will be updated.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+      tags:
+        - Users
+      security:
+        - HumanJWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserDetailsPayload'
+      responses:
+        '200':
+          description: User information updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetailsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: Token does not have required scope
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      operationId: DeleteAccount
+      summary: Delete current user account
+      description: |
+        Soft deletes the authenticated user's account by setting deleted_at timestamp.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+      tags:
+        - Users
+      security:
+        - HumanJWT: []
+      responses:
+        '204':
+          description: User account deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: Token does not have required scope
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations:
+    post:
+      operationId: CreateOrganization
+      summary: Create a new organization
+      description: |
+        Creates a new organization. The authenticated user becomes the owner.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationPayload'
+      responses:
+        '201':
+          description: Organization created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: Token does not have required scope
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: Organization with this name already exists
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      operationId: ListOrganizations
+      summary: List organizations for the authenticated user
+      description: |
+        Retrieves all organizations the authenticated user is a member of.
+        No pagination is used as users typically belong to only a few organizations.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      responses:
+        '200':
+          description: Organizations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: Token does not have required scope
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}:
+    get:
+      operationId: GetOrganization
+      summary: Get organization details
+      description: |
+        Retrieves details of a specific organization.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be a member of the organization.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Organization retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not a member of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      operationId: UpdateOrganization
+      summary: Update organization metadata
+      description: |
+        Updates organization metadata (name, description, logo).
+        Only provided fields will be updated.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the organization.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationPayload'
+      responses:
+        '200':
+          description: Organization updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      operationId: DeleteOrganization
+      summary: Soft delete an organization
+      description: |
+        Soft deletes an organization.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner of the organization.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Organization deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/activate:
+    post:
+      operationId: ActivateOrganization
+      summary: Activate an organization
+      description: |
+        Activates an organization.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the organization.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Organization activated successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/suspend:
+    post:
+      operationId: SuspendOrganization
+      summary: Suspend an organization
+      description: |
+        Suspends an organization (deactivates it).
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the organization.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Organization suspended successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/members:
+    get:
+      operationId: ListOrganizationMembers
+      summary: List members of an organization
+      description: |
+        Retrieves a paginated list of members for a specific organization.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be a member of the organization.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number (1-indexed)
+          example: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page
+          example: 20
+      responses:
+        '200':
+          description: Members retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMembersListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not a member of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/members/me:
+    get:
+      operationId: GetOrganizationMemberMe
+      summary: Get the calling user's role in an organization
+      description: |
+        Returns the authenticated user's membership record for the given organization,
+        including their role. Looks up by the user ID from the bearer token against
+        the org_members table.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Membership record retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: User is not a member of this organization
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/members/invite:
+    post:
+      operationId: InviteOrganizationMember
+      summary: Invite a new member to an organization
+      description: |
+        Invites a user to an organization by email address.
+        Creates a user record if the user doesn't exist.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the organization.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteOrganizationMemberPayload'
+      responses:
+        '201':
+          description: Member invited successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: User is already a member of the organization
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/members/{user_id}:
+    patch:
+      operationId: UpdateOrganizationMember
+      summary: Update member role or status
+      description: |
+        Updates a member's role in an organization.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the organization.
+        Only owners can assign the owner role.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        - in: path
+          name: user_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: User ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationMemberPayload'
+      responses:
+        '200':
+          description: Member updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization or member not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      operationId: RemoveOrganizationMember
+      summary: Remove a member from an organization
+      description: |
+        Removes a member from an organization.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the organization.
+      tags:
+        - Organizations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        - in: path
+          name: user_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: User ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Member removed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization or member not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/projects:
+    post:
+      operationId: CreateProject
+      summary: Create a project under an organization
+      description: |
+        Creates a new project under the organization. Returns the project and a project token (API key) shown only once.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the organization.
+      tags:
+        - Projects
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectPayload'
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWithToken'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: Project with this name already exists in the organization
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      operationId: ListProjects
+      summary: List projects for an organization
+      description: |
+        Retrieves all projects for the organization.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be a member of the organization.
+      tags:
+        - Projects
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Projects retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not a member of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Organization not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/usage:
+    get:
+      operationId: GetOrganizationUsage
+      summary: Get organization usage
+      description: |
+        Returns usage counts (pulses, API calls, logs) for the organization for a given day.
+        Data is from Layer 2 (persistent daily aggregates). Default date is today UTC.
+        Requires authentication via Bearer token with human JWT. User must be a member of the organization.
+      tags:
+        - Usage
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+            description: Date (YYYY-MM-DD) in UTC. Defaults to today.
+          required: false
+      responses:
+        '200':
+          description: Usage for the organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/integrations/slack:
+    get:
+      operationId: GetSlackIntegration
+      summary: Get Slack integration status
+      description: |
+        Returns whether the organization has Slack connected and optional team info.
+        Requires authentication. User must be a member of the organization.
+      tags:
+        - Integrations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+      responses:
+        '200':
+          description: Integration status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackIntegrationStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      operationId: ConnectSlackIntegration
+      summary: Connect Slack (OAuth callback)
+      description: |
+        Exchanges the OAuth code from the frontend callback and stores the Slack integration for the org.
+        Redirect URI must match the frontend URL used in the authorize step.
+        Requires authentication. User must be an owner or admin of the organization.
+      tags:
+        - Integrations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectSlackPayload'
+      responses:
+        '200':
+          description: Slack connected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackConnectResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      operationId: DisconnectSlackIntegration
+      summary: Disconnect Slack
+      description: |
+        Removes the Slack integration for the organization.
+        Requires authentication. User must be an owner or admin of the organization.
+      tags:
+        - Integrations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+      responses:
+        '204':
+          description: Slack disconnected
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/integrations/slack/channels:
+    get:
+      operationId: ListSlackChannels
+      summary: List Slack channels
+      description: |
+        Returns channels the org's Slack bot can post to (for alert rule channel picker).
+        Requires Slack to be connected for the organization.
+        Requires authentication. User must be a member of the organization.
+      tags:
+        - Integrations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+      responses:
+        '200':
+          description: List of channels
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackChannelsListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: Slack not connected for this organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/integrations/twilio:
+    get:
+      operationId: GetTwilioIntegration
+      summary: Get Twilio integration status
+      description: |
+        Returns whether the organization has Twilio connected and optional masked account info.
+        Requires authentication. User must be a member of the organization.
+      tags:
+        - Integrations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+      responses:
+        '200':
+          description: Integration status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwilioIntegrationStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      operationId: ConnectTwilioIntegration
+      summary: Connect Twilio (BYOK)
+      description: |
+        Validates the provided Twilio credentials and stores the integration for the org.
+        Requires authentication. User must be an owner or admin of the organization.
+      tags:
+        - Integrations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectTwilioPayload'
+      responses:
+        '200':
+          description: Twilio connected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwilioConnectResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      operationId: DisconnectTwilioIntegration
+      summary: Disconnect Twilio
+      description: |
+        Removes the Twilio integration for the organization.
+        Requires authentication. User must be an owner or admin of the organization.
+      tags:
+        - Integrations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+      responses:
+        '204':
+          description: Twilio disconnected
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /organizations/{org_id}/integrations/twilio/test:
+    post:
+      operationId: TestTwilioIntegration
+      summary: Send test SMS
+      description: |
+        Sends a test SMS to the given number. Requires Twilio to be connected for the organization.
+        Requires authentication. User must be an owner or admin of the organization.
+      tags:
+        - Integrations
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: org_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestTwilioPayload'
+      responses:
+        '200':
+          description: Test SMS sent
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: Twilio not connected for this organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}:
+    get:
+      operationId: GetProject
+      summary: Get project details
+      description: |
+        Retrieves details of a specific project.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be a member of the project's organization.
+      tags:
+        - Projects
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+          example: "550e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '200':
+          description: Project retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not a member of the project's organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      operationId: UpdateProject
+      summary: Update project details
+      description: |
+        Updates project metadata (name, description). Only provided fields will be updated.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the project's organization.
+      tags:
+        - Projects
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+          example: "550e8400-e29b-41d4-a716-446655440001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectPayload'
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      operationId: DeleteProject
+      summary: Delete a project
+      description: |
+        Deletes a project. This action is permanent.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the project's organization.
+      tags:
+        - Projects
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+          example: "550e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '204':
+          description: Project deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/usage:
+    get:
+      operationId: GetProjectUsage
+      summary: Get project usage
+      description: |
+        Returns usage counts (pulses, API calls, logs) for the project for a given day.
+        Data is from Layer 1 (real-time counters). Default date is today UTC.
+        Requires authentication via Bearer token with human JWT. User must be a member of the project's organization.
+      tags:
+        - Usage
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+            description: Date (YYYY-MM-DD) in UTC. Defaults to today.
+          required: false
+      responses:
+        '200':
+          description: Usage for the project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/dashboard:
+    get:
+      operationId: GetProjectDashboard
+      summary: Get project dashboard
+      description: |
+        Returns dashboard summary (active alerts, jobs overview, API health, error logs), needs-attention items (down jobs, active alerts, API with errors), event volume last 24h, and recent activity. Time windows are fixed (24h for alerts/volume, 15 min for API health, 1h for error logs). Requires authentication via Bearer token with human JWT.
+      tags:
+        - Dashboard
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+      responses:
+        '200':
+          description: Dashboard retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/activate:
+    post:
+      operationId: ActivateProject
+      summary: Activate a project
+      description: |
+        Activates a project.
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the project's organization.
+      tags:
+        - Projects
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+          example: "550e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '204':
+          description: Project activated successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/suspend:
+    post:
+      operationId: SuspendProject
+      summary: Suspend a project
+      description: |
+        Suspends a project (deactivates it).
+        Requires authentication via Bearer token with human JWT (Layer 1 - Human auth).
+        User must be an owner or admin of the project's organization.
+      tags:
+        - Projects
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+          example: "550e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '204':
+          description: Project suspended successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: User is not an owner or admin of the organization
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/api-monitoring:
+    get:
+      operationId: ListProjectApiMonitoring
+      summary: Recent API calls
+      description: |
+        **Use this for: recent calls list.** Paginated list of individual API calls. Each item has method (GET/POST/etc), url, serviceName, date (receivedAt), statusCode, response time in ms (latencyMs), and optionally request/response bodies. Filter by serviceName, method, or statusCode. Requires authentication via Bearer token with human JWT.
+      tags:
+        - API Monitoring
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+        - in: query
+          name: serviceName
+          schema:
+            type: string
+          description: Filter by service name
+        - in: query
+          name: method
+          schema:
+            type: string
+          description: Filter by HTTP method
+        - in: query
+          name: statusCode
+          schema:
+            type: integer
+            format: int32
+          description: Filter by response status code
+        - in: query
+          name: fromTime
+          schema:
+            type: string
+            format: date-time
+          description: Only include events received at or after this time (UTC). Omitted with toTime defaults to last 24 hours.
+        - in: query
+          name: toTime
+          schema:
+            type: string
+            format: date-time
+          description: Only include events received before this time (UTC). Omitted with fromTime defaults to now.
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Opaque cursor for the next page (from previous response nextCursor). Use with limit for keyset pagination.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Page size (default 20, max 100).
+      responses:
+        '200':
+          description: API calls retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiMonitoringListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid project ID or query parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/logs:
+    get:
+      operationId: ListProjectLogs
+      summary: List project logs
+      description: |
+        **Offset-based pagination only.** Returns log events for the project with full details (id, message, status, source, date, payload, etc.). Filter by time range (default last 24h), status (level), and search in message. Requires authentication via Bearer token with human JWT.
+      tags:
+        - Logs
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+        - in: query
+          name: fromTime
+          schema:
+            type: string
+            format: date-time
+          description: Only include logs received at or after this time (UTC). Omitted with toTime defaults to last 24 hours.
+        - in: query
+          name: toTime
+          schema:
+            type: string
+            format: date-time
+          description: Only include logs received before this time (UTC). Omitted with fromTime defaults to now.
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+          description: Filter by log level (status)
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Substring search in log message
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number (1-based)
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page
+      responses:
+        '200':
+          description: Logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid project ID or query parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/logs/timeline:
+    get:
+      operationId: ListProjectLogsTimeline
+      summary: Logs timeline (counts per bucket and status)
+      description: |
+        Returns time-bucketed log counts per status for a stacked bar chart. Each bucket has counts for debug, info, warn, error. Time range can be sent via fromTime/toTime (explicit) or span (e.g. last 24h). Bucket interval is configurable (default 1h). Requires authentication via Bearer token with human JWT.
+      tags:
+        - Logs
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+        - in: query
+          name: fromTime
+          schema:
+            type: string
+            format: date-time
+          description: Start of time range (UTC). If omitted, use span or default last 24h.
+        - in: query
+          name: toTime
+          schema:
+            type: string
+            format: date-time
+          description: End of time range (UTC). If omitted, defaults to now.
+        - in: query
+          name: span
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d]
+          description: Time span as "last X" (1h, 6h, 24h, 7d). Ignored if fromTime and toTime are both provided.
+        - in: query
+          name: interval
+          schema:
+            type: string
+            enum: [15m, 1h, 1d]
+            default: 1h
+          description: Bucket interval for the chart (15m, 1h, or 1d). Default 1h.
+      responses:
+        '200':
+          description: Timeline retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogTimelineResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid project ID or query parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/api-monitoring/summary:
+    get:
+      operationId: ListProjectApiMonitoringSummary
+      summary: List of services
+      description: |
+        **Use this for: list of services (aggregates).** One row per service: serviceName, totalCalls, errors, errorRate, avgLatencyMs (average response time in ms). Optional time range via fromTime and toTime (RFC3339). Requires authentication via Bearer token with human JWT.
+      tags:
+        - API Monitoring
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Project ID
+        - in: query
+          name: fromTime
+          schema:
+            type: string
+            format: date-time
+          description: Only include events received at or after this time (RFC3339)
+        - in: query
+          name: toTime
+          schema:
+            type: string
+            format: date-time
+          description: Only include events received before this time (RFC3339)
+      responses:
+        '200':
+          description: Services summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiMonitoringSummaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid project ID or query parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/api-monitoring/services/{service_name}:
+    get:
+      operationId: GetProjectApiMonitoringServiceDetail
+      summary: Service detail (endpoints and URLs)
+      description: |
+        **Use this when a user clicks a service** from the list of services. Returns a human-friendly display name, the raw service name, and all endpoints (method + URL) for that service with call counts and average latency. Data is read from refreshable materialized views for fast response. Optional fromTime and toTime (RFC3339) scope the aggregates (default last 24h).
+      tags:
+        - API Monitoring
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Project ID
+        - in: path
+          name: service_name
+          required: true
+          schema:
+            type: string
+          description: Service name as returned by the summary list (e.g. stripe, ticketmaster). URL-encode if it contains special characters.
+        - in: query
+          name: fromTime
+          schema:
+            type: string
+            format: date-time
+          description: Start of time range for aggregates (RFC3339). Default 24h before toTime.
+        - in: query
+          name: toTime
+          schema:
+            type: string
+            format: date-time
+          description: End of time range for aggregates (RFC3339). Default now.
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Opaque cursor for the next page (from previous response nextCursor). Use with limit for keyset pagination.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of endpoints per page
+      responses:
+        '200':
+          description: Service detail retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiMonitoringServiceDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid project ID or service name
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/api-monitoring/service-names:
+    get:
+      operationId: ListProjectApiMonitoringServiceNames
+      summary: List service names
+      description: |
+        Returns a list of distinct service names for the project, ordered alphabetically.
+        Use this to populate dropdowns or filters for service selection (e.g., when creating API monitoring alerts).
+      tags:
+        - API Monitoring
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Project ID
+      responses:
+        '200':
+          description: List of service names retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiMonitoringServiceNamesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Project not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/api-monitoring/alerts:
+    get:
+      operationId: ListAPIMonitoringAlerts
+      summary: List API Monitoring alert rules
+      description: Returns active API alert rules (api_error_rate, api_latency) for the project.
+      tags:
+        - API Monitoring Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of API Monitoring alert rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRulesListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      operationId: CreateAPIMonitoringAlert
+      summary: Create API Monitoring alert
+      description: |
+        Creates an API monitoring alert rule for the project. Valid types: api_error_rate, api_latency.
+        Use condition.serviceName (required), condition.comparator, condition.threshold, condition.windowSeconds, and condition.minCount.
+      tags:
+        - API Monitoring Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAPIMonitoringAlertPayload'
+      responses:
+        '201':
+          description: Alert rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/api-monitoring/alerts/{alert_id}:
+    get:
+      operationId: GetAPIMonitoringAlert
+      summary: Get API Monitoring alert rule by ID
+      tags:
+        - API Monitoring Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: alert_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Alert rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      operationId: UpdateAPIMonitoringAlert
+      summary: Update API Monitoring alert rule
+      tags:
+        - API Monitoring Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: alert_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAPIMonitoringAlertPayload'
+      responses:
+        '200':
+          description: Alert rule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+          
+    delete:
+      operationId: DeleteAPIMonitoringAlert
+      summary: Delete API Monitoring alert rule
+      tags:
+        - API Monitoring Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: alert_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Alert rule deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/log-alerts:
+    get:
+      operationId: ListLogAlerts
+      summary: List log alert rules
+      description: Returns all non-deleted log alert rules (log_error_count, log_error_rate, log_absence) for the project.
+      tags:
+        - Log Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of log alert rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRulesListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      operationId: CreateLogAlert
+      summary: Create a log alert rule
+      description: |
+        Creates a log alert rule for the project. Valid types: log_error_count, log_error_rate, log_absence.
+        logSourceFilter in condition is required and scopes the rule to a specific source value.
+        messagePattern is optional; if set, must be a valid RE2 regex.
+      tags:
+        - Log Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLogAlertPayload'
+      responses:
+        '201':
+          description: Log alert rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{project_id}/log-alerts/{alert_id}:
+    get:
+      operationId: GetLogAlert
+      summary: Get a log alert rule by ID
+      tags:
+        - Log Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: alert_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Log alert rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      operationId: UpdateLogAlert
+      summary: Update a log alert rule
+      tags:
+        - Log Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: alert_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLogAlertPayload'
+      responses:
+        '200':
+          description: Log alert rule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      operationId: DeleteLogAlert
+      summary: Delete a log alert rule
+      tags:
+        - Log Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: project_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: alert_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Log alert rule deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api-monitoring/{eventId}/details:
+    get:
+      operationId: GetApiMonitoringEventDetails
+      summary: Endpoint detail by event ID
+      description: |
+        **Use this for: detailed view of one endpoint.** Pass the ingestion **eventId** (from the API calls list). Access is enforced by verifying the authenticated user can access the project that owns the event. Returns latest status code and latency, service name, average latency over last 24h, errors count in last 24h with time-series buckets for graphing, and the latest request/response bodies. Optional toTime (RFC3339) sets the end of the 24h window (default now).
+      tags:
+        - API Monitoring
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Ingestion event ID (from the API calls list)
+        - in: query
+          name: toTime
+          schema:
+            type: string
+            format: date-time
+          description: End of the 24h window (UTC). Default is now.
+      responses:
+        '200':
+          description: Endpoint detail retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiMonitoringEndpointDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid eventId format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Event not found or user cannot access the event's project
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /ingestion/pulse/{externalId}:
+    post:
+      operationId: IngestPulse
+      summary: Ingest a pulse from a job
+      description: |
+        Accepts a pulse event from a job/script to indicate it's running.
+        Authenticate with the project API key via the X-Api-Key header. The job is identified by externalId in the path.
+        The API key's org and project must match the job's org and project.
+      tags:
+        - Ingestion
+      security:
+        - ProjectAPIKey: []
+      parameters:
+        - name: externalId
+          in: path
+          required: true
+          description: External ID of the job sending the pulse (must belong to the API key's project).
+          schema:
+            type: string
+            example: job_abc123
+        - name: X-PostGhost-SDK-Version
+          in: header
+          required: false
+          description: Version of the client or PostGhost SDK (e.g. 1.0.0). Optional; used for analytics and support.
+          schema:
+            type: string
+            example: "1.0.0"
+        - name: X-PostGhost-SDK-Name
+          in: header
+          required: false
+          description: Identifier for the SDK or client (e.g. node, python, curl). Optional.
+          schema:
+            type: string
+            example: node
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PulsePayload'
+      responses:
+        '202':
+          description: Pulse accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PulseAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: Token does not have project scope or job does not belong to project
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Job not found or job does not belong to the API key's project
+        '413':
+          description: Request body exceeds size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              example:
+                code: too_large
+                slug: payload-too-large
+                message: Request body exceeds 4KB limit
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          description: Service unavailable (enqueue/publish failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              example:
+                code: unavailable
+                slug: enqueue-failed
+                message: Service unavailable
+
+  /ingestion/api-monitoring:
+    post:
+      operationId: IngestApiMonitoring
+      summary: Submit API monitoring event
+      description: |
+        Accepts one or more API call events for outbound HTTP monitoring (e.g. from PostGhost SDK).
+        Request body may be a single ApiMonitoringPayload object or an array of ApiMonitoringPayload; when array, each element is processed independently and response eventIds contains one id per element in order.
+        Authenticate with the project API key via the X-Api-Key header.
+        Request/response bodies and metadata are stored for dashboard and alerting. Processing is idempotent by event_id.
+
+        **Setting up multiple APIs:** There is no separate "add API" or registration step. Use this same endpoint for every external API you monitor. Identify each integration by the `serviceName` field in the payload (e.g. "stripe", "ticketmaster", "sendgrid"). To monitor a second API, instrument it with the SDK and send events with a different `serviceName`; they will appear as a separate service in the API Monitoring dashboard.
+      tags:
+        - Ingestion
+      security:
+        - ProjectAPIKey: []
+      parameters:
+        - name: X-PostGhost-SDK-Version
+          in: header
+          required: false
+          description: Version of the client or PostGhost SDK (e.g. 1.0.0). Same as pulse and logs; use headers only for consistency.
+          schema:
+            type: string
+            example: "1.0.0"
+        - name: X-PostGhost-SDK-Name
+          in: header
+          required: false
+          description: Identifier for the SDK or client (e.g. node, python, curl). Optional.
+          schema:
+            type: string
+            example: node
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ApiMonitoringPayload'
+                - $ref: '#/components/schemas/ApiMonitoringPayloadBatch'
+      responses:
+        '202':
+          description: API monitoring event accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiMonitoringAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: Token does not have project scope
+        '413':
+          description: Request body exceeds size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              example:
+                code: too_large
+                slug: payload-too-large
+                message: Request body exceeds size limit
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          description: Service unavailable (enqueue/publish failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              example:
+                code: unavailable
+                slug: enqueue-failed
+                message: Service unavailable
+
+  /ingestion/logs:
+    post:
+      operationId: IngestLogs
+      summary: Submit log event
+      description: |
+        Accepts a log event in one of two forms. Authenticate with the project API key via the X-Api-Key header.
+        Logs are stored in ClickHouse for querying and dashboards. Processing is idempotent by event_id.
+
+        **Structured** — Send a payload with required `level` (debug|info|warn|error) and `message`, plus optional
+        timestamp, attributes, jobId, source. Stored as-is (no _raw wrapper).
+
+        **Raw** — Send a payload with `rawLog` as a string (a single log line or JSON string). The server parses and normalizes it into the structured log model (like Datadog).
+      tags:
+        - Ingestion
+      security:
+        - ProjectAPIKey: []
+      parameters:
+        - name: X-PostGhost-SDK-Version
+          in: header
+          required: false
+          description: Version of the client or PostGhost SDK (e.g. 1.0.0). Optional; used for analytics and support.
+          schema:
+            type: string
+            example: "1.0.0"
+        - name: X-PostGhost-SDK-Name
+          in: header
+          required: false
+          description: Identifier for the SDK or client (e.g. node, python, curl). Optional.
+          schema:
+            type: string
+            example: node
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestionLogsRequestBody'
+      responses:
+        '202':
+          description: Log event accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogsAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+          description: Missing or invalid authentication token
+        '403':
+          $ref: '#/components/responses/Forbidden'
+          description: Token does not have project scope
+        '413':
+          description: Request body exceeds size limit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              example:
+                code: too_large
+                slug: payload-too-large
+                message: Request body exceeds size limit
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          description: Service unavailable (enqueue/publish failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              example:
+                code: unavailable
+                slug: enqueue-failed
+                message: Service unavailable
+
+  /jobs:
+    get:
+      operationId: GetJobs
+      summary: List jobs for a project
+      description: |
+        Retrieves a paginated list of jobs for the given project with optional filtering and sorting.
+        User must be a member of the project.
+      tags:
+        - Jobs
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: query
+          name: projectId
+          schema:
+            type: string
+          required: true
+          description: Project ID to list jobs for
+          example: proj_456def
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Filter by job name (partial match)
+          example: "Background"
+        - in: query
+          name: healthStatus
+          schema:
+            type: string
+            enum: [unknown, up, down, degraded]
+          description: Filter by health status
+          example: up
+        - in: query
+          name: operationalStatus
+          schema:
+            type: string
+            enum: [active, inactive]
+          description: Filter by operational status
+          example: active
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [lastPulseAt, createdAt, updatedAt, name]
+            default: createdAt
+          description: Field to sort by
+          example: lastPulseAt
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort order (ascending or descending)
+          example: desc
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number (1-indexed)
+          example: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of items per page
+          example: 20
+      responses:
+        '200':
+          description: Jobs retrieved successfully (includes overview counts and lastPulsesStatus per job)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobsListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid project ID or query parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      operationId: CreateJob
+      summary: Create a job
+      description: |
+        Creates a new job entry.
+      tags:
+        - Jobs
+      security:
+        - HumanJWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobPayload'
+      responses:
+        '201':
+          description: Job created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid request body or JSON format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /jobs/overview/refresh:
+    post:
+      operationId: RefreshJobsOverview
+      summary: Refresh jobs overview
+      description: |
+        Repopulates the jobs overview (materialized counts) for the given project from current jobs and last pulses.
+        Use after bulk imports or to backfill. Overview is otherwise kept in sync by the job evaluation worker.
+      tags:
+        - Jobs
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: query
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Project ID to refresh overview for
+      responses:
+        '202':
+          description: Refresh accepted (runs asynchronously or completes quickly)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid project ID
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /jobs/{id}/pulses:
+    get:
+      operationId: GetJobPulses
+      summary: Get pulses for a specific job
+      description: |
+        Retrieves a cursor-paginated list of pulses for a specific job.
+        Returns pulses in reverse chronological order (newest first).
+      tags:
+        - Jobs
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The job ID (UUID)
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Number of pulses to return per page
+          example: 50
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Cursor for pagination (from previous response's nextCursor)
+          example: eyJyZWNlaXZlZEF0IjoiMjAyNC0wNi0xOFQxNjowMDowMFoifQ==
+      responses:
+        '200':
+          description: Pulses retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PulsesListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid job ID or query parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Job not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /jobs/{id}:
+    get:
+      operationId: GetJob
+      summary: Get a job by ID
+      description: |
+        Retrieves details for a single job given its ID (UUID).
+      tags:
+        - Jobs
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The job ID (UUID) to retrieve
+      responses:
+        '200':
+          description: Job retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid job ID input
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      operationId: UpdateJob
+      summary: Partially update a job
+      description: |
+        Updates one or more fields (title, description, expectedIntervalMs, gracePeriodMs, operationalStatus) on the specified job.
+        Only provided fields will be updated. `operationalStatus` can be `active` or `inactive`.
+      tags:
+        - Jobs
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The job ID (UUID) to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateJobPayload'
+      responses:
+        '200':
+          description: Job updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid input or request body
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      operationId: DeleteJob
+      summary: Delete a job
+      description: |
+        Deletes the specified job. This action is permanent and cannot be undone.
+      tags:
+        - Jobs
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The job ID (UUID) to delete
+      responses:
+        '204':
+          description: Job deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /jobs/{id}/alerts:
+    get:
+      operationId: ListJobAlertRules
+      summary: List alert rules for a job
+      description: |
+        Returns all alert rules scoped to the given job (and project-level rules that apply to the job).
+        Alerts are a sub-resource of the job (same pattern as /jobs/{id}/pulses).
+      tags:
+        - Jobs Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Job ID (UUID)
+      responses:
+        '200':
+          description: Alert rules retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRulesListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      operationId: CreateJobAlertRule
+      summary: Create an alert rule for a job
+      description: |
+        Creates a new alert rule for the given job. Valid types: job_health, job_no_pulse.
+        - job_health: use condition.newStatusFilters and condition.previousStatusFilters to notify on status transitions.
+        - job_no_pulse: use condition.noPulseAfterSeconds to alert when no heartbeat is received.
+      tags:
+        - Jobs Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Job ID (UUID)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobAlertPayload'
+      responses:
+        '201':
+          description: Alert rule created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /jobs/{id}/alerts/{alert_id}:
+    get:
+      operationId: GetJobAlertRule
+      summary: Get an alert rule by ID
+      description: |
+        Retrieves a single alert rule for the given job.
+      tags:
+        - Jobs Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Job ID (UUID)
+        - in: path
+          name: alert_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Alert rule ID (UUID)
+      responses:
+        '200':
+          description: Alert rule retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch:
+      operationId: UpdateJobAlertRule
+      summary: Update an alert rule for a job
+      description: |
+        Updates an existing alert rule. Only provided fields are updated.
+      tags:
+        - Jobs Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Job ID (UUID)
+        - in: path
+          name: alert_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Alert rule ID (UUID)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateJobAlertPayload'
+      responses:
+        '200':
+          description: Alert rule updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      operationId: DeleteJobAlertRule
+      summary: Delete an alert rule for a job
+      description: |
+        Deletes the specified alert rule.
+      tags:
+        - Jobs Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Job ID (UUID)
+        - in: path
+          name: alert_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Alert rule ID (UUID)
+      responses:
+        '204':
+          description: Alert rule deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /alerts/{alert_id}/logs:
+    get:
+      operationId: GetAlertLogs
+      summary: List alert logs for an alert rule
+      description: |
+        Returns paginated alert logs for the specified alert rule. Logs are ordered by evaluated_at descending.
+        Only returns id, message, and evaluatedAt fields.
+      tags:
+        - Alerts
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: alert_id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Alert rule ID (UUID)
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Opaque cursor for the next page (from previous response pagination.nextCursor). Use with limit for keyset pagination.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Page size (default 50, max 100).
+      responses:
+        '200':
+          description: Alert logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertLogsListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid alert rule ID or query parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications:
+    get:
+      operationId: ListNotifications
+      summary: List notifications for the current user
+      description: |
+        Returns paginated notifications for the authenticated user in the specified organization, optionally filtered by project.
+        Results include per-notification readAt for the user.
+      tags:
+        - Notifications
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: query
+          name: orgId
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID to retrieve notifications for. If omitted, no notifications are returned.
+        - in: query
+          name: projectId
+          schema:
+            type: string
+            format: uuid
+          required: false
+          description: Optional project filter. If omitted, returns notifications for the whole organization.
+        - in: query
+          name: only_unread
+          schema:
+            type: boolean
+            default: false
+          required: false
+          description: If true, only returns notifications that are unread for the current user.
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          required: false
+          description: Opaque cursor for the next page (from previous response pagination.nextCursor). Use with limit for keyset pagination.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          required: false
+          description: Page size (default 50, max 100).
+      responses:
+        '200':
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationsListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications/mark-all-read:
+    post:
+      operationId: MarkAllNotificationsRead
+      summary: Mark all notifications as read for the current user
+      description: |
+        Marks all notifications in the specified organization (and optional project) as read for the authenticated user.
+        Only notifications that are not already read are updated. Scope is the same as list (org + optional project).
+      tags:
+        - Notifications
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: query
+          name: orgId
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID. The current user must be a member.
+        - in: query
+          name: projectId
+          schema:
+            type: string
+            format: uuid
+          required: false
+          description: Optional project scope. If omitted, marks all notifications in the organization as read.
+      responses:
+        '204':
+          description: All notifications in scope marked as read
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications/{id}/read:
+    post:
+      operationId: MarkNotificationRead
+      summary: Mark a notification as read for the current user
+      tags:
+        - Notifications
+      security:
+        - HumanJWT: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Notification ID
+        - in: query
+          name: orgId
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Organization ID owning the notification. The current user must be a member.
+        - in: query
+          name: projectId
+          schema:
+            type: string
+            format: uuid
+          required: false
+          description: Optional project scope. If provided, the notification must belong to this project.
+      responses:
+        '204':
+          description: Notification marked as read
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    ProjectAPIKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        Project API key for pulse ingestion and SDK events (Layer 3 - Machine auth).
+        Send the key in the X-Api-Key header. The key identifies the project.
+        Scope: project_id (and org_id); no job_id. Job identified by path param externalId.
+    
+    HumanJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Human authentication token for dashboard access (Layer 1 - Human auth).
+        JWT issued by external identity provider (Cognito/Clerk).
+        Verified via JWKS. Includes user_id, org_id, and roles.
+
+  schemas:
+    UserDetailsResponse:
+      type: object
+      required:
+        - fullName
+        - email
+        - id
+      properties:
+        fullName:
+          type: string
+          description: User's full name
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "john.doe@example.com"
+        phoneNumber:
+          type: string
+          nullable: true
+          description: User's phone number
+          example: "+1234567890"
+        id:
+          type: string
+          format: uuid
+          description: User's ID (internal user ID)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    UpdateUserDetailsPayload:
+      type: object
+      properties:
+        fullName:
+          type: string
+          description: User's full name
+          example: "Jane Doe"
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "jane.doe@example.com"
+        phoneNumber:
+          type: string
+          nullable: true
+          description: User's phone number
+          example: "+1987654321"
+
+    CreateOrganizationPayload:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Organization name
+          example: "Acme Corp"
+        description:
+          type: string
+          nullable: true
+          description: Organization description
+          example: "A leading technology company"
+        logo:
+          type: string
+          nullable: true
+          description: Organization logo URL or base64 encoded image
+          example: "https://example.com/logo.png"
+
+    UpdateOrganizationPayload:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Organization name
+          example: "Acme Corp"
+        description:
+          type: string
+          nullable: true
+          description: Organization description
+          example: "A leading technology company"
+        logo:
+          type: string
+          nullable: true
+          description: Organization logo URL or base64 encoded image
+          example: "https://example.com/logo.png"
+
+    Organization:
+      type: object
+      required:
+        - id
+        - name
+        - isActive
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Organization name
+          example: "Acme Corp"
+        description:
+          type: string
+          nullable: true
+          description: Organization description
+          example: "A leading technology company"
+        logo:
+          type: string
+          nullable: true
+          description: Organization logo URL or base64 encoded image
+          example: "https://example.com/logo.png"
+        isActive:
+          type: boolean
+          description: Whether the organization is active
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+
+    OrganizationsListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Organization'
+          description: Array of organizations
+        pagination:
+          $ref: '#/components/schemas/OffsetPagination'
+
+    InviteOrganizationMemberPayload:
+      type: object
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email address of the user to invite
+          example: "newuser@example.com"
+        role:
+          type: string
+          enum:
+            - owner
+            - admin
+            - developer
+            - viewer
+          description: Role to assign to the user in the organization
+          example: "developer"
+
+    UpdateOrganizationMemberPayload:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum:
+            - owner
+            - admin
+            - developer
+            - viewer
+          description: New role for the member
+          example: "admin"
+
+    OrganizationMember:
+      type: object
+      required:
+        - id
+        - name
+        - email
+        - role
+        - invitedTime
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: User's full name
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "john.doe@example.com"
+        role:
+          type: string
+          enum:
+            - owner
+            - admin
+            - developer
+            - viewer
+          description: Member role in the organization
+          example: "developer"
+        invitedTime:
+          type: string
+          format: date-time
+          description: When the member joined the organization (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+          description: User account status (active if not deleted, inactive if deleted)
+          example: "active"
+
+    OrganizationMembersListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationMember'
+          description: Array of organization members
+        pagination:
+          $ref: '#/components/schemas/OffsetPagination'
+
+    CreateProjectPayload:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Project name
+          example: "My Project"
+        description:
+          type: string
+          nullable: true
+          description: Project description
+          example: "A project for background jobs"
+        color:
+          type: string
+          description: Project marker/identification (e.g. hex "#FF5733" or name "blue")
+          example: "#3B82F6"
+
+    UpdateProjectPayload:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Project name
+          example: "My Project"
+        description:
+          type: string
+          nullable: true
+          description: Project description
+          example: "Updated project description"
+        color:
+          type: string
+          description: Project marker/identification (e.g. hex "#FF5733" or name "blue")
+          example: "#3B82F6"
+
+    Project:
+      type: object
+      required:
+        - id
+        - orgId
+        - name
+        - color
+        - isActive
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Project ID
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        orgId:
+          type: string
+          format: uuid
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Project name
+          example: "My Project"
+        description:
+          type: string
+          nullable: true
+          description: Project description
+          example: "A project for background jobs"
+        color:
+          type: string
+          description: Project marker/identification (e.g. hex "#FF5733" or name "blue")
+          example: "#3B82F6"
+        isActive:
+          type: boolean
+          description: Whether the project is active
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+        projectToken:
+          type: string
+          nullable: true
+          description: Project API key for reuse (e.g. in Authorization header). Present when retrieving project details if encryption is configured.
+
+    ProjectWithToken:
+      type: object
+      required:
+        - id
+        - orgId
+        - name
+        - color
+        - isActive
+        - projectToken
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Project ID
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        orgId:
+          type: string
+          format: uuid
+          description: Organization ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Project name
+          example: "My Project"
+        description:
+          type: string
+          nullable: true
+          description: Project description
+          example: "A project for background jobs"
+        color:
+          type: string
+          description: Project marker/identification (e.g. hex "#FF5733" or name "blue")
+          example: "#3B82F6"
+        isActive:
+          type: boolean
+          description: Whether the project is active
+          example: true
+        projectToken:
+          type: string
+          description: Project API key (shown only once; store securely)
+          example: "pgk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - version
+      properties:
+        status:
+          type: string
+          description: Health status of the service
+          enum:
+            - ok
+            - degraded
+            - unhealthy
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          description: Current server timestamp in RFC3339 format
+          example: "2024-01-15T10:30:00Z"
+        version:
+          type: string
+          description: API version
+          example: "1.0.0"
+        service:
+          type: string
+          description: Service name
+          example: "postghost-api"
+
+    UsageResponse:
+      type: object
+      required:
+        - windowStart
+        - counts
+      properties:
+        windowStart:
+          type: string
+          format: date
+          description: Start of the usage window (YYYY-MM-DD, midnight UTC)
+          example: "2025-02-25"
+        counts:
+          type: object
+          description: Usage counts per metric kind
+          properties:
+            pulse:
+              type: integer
+              minimum: 0
+              description: Number of pulse events
+              example: 42
+            apiCall:
+              type: integer
+              minimum: 0
+              description: Number of API monitoring events
+              example: 100
+            log:
+              type: integer
+              minimum: 0
+              description: Number of log events
+              example: 500
+
+    SlackIntegrationStatus:
+      type: object
+      required:
+        - connected
+      properties:
+        connected:
+          type: boolean
+          description: Whether Slack is connected for this organization
+        teamId:
+          type: string
+          description: Slack workspace (team) ID (when connected)
+        teamName:
+          type: string
+          description: Slack workspace (team) name (when connected)
+
+    ConnectSlackPayload:
+      type: object
+      required:
+        - code
+        - redirectUri
+      properties:
+        code:
+          type: string
+          description: OAuth code from Slack redirect callback
+        redirectUri:
+          type: string
+          format: uri
+          description: Exact redirect URI used in the authorize step (frontend callback URL)
+
+    SlackConnectResult:
+      type: object
+      required:
+        - teamId
+      properties:
+        teamId:
+          type: string
+          description: Slack workspace (team) ID
+        teamName:
+          type: string
+          description: Slack workspace (team) name
+
+    SlackChannelListItem:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Slack channel ID
+        name:
+          type: string
+          description: Channel name (without #)
+        isPrivate:
+          type: boolean
+          description: Whether the channel is private
+          default: false
+
+    SlackChannelsListResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlackChannelListItem'
+
+    TwilioIntegrationStatus:
+      type: object
+      required:
+        - connected
+      properties:
+        connected:
+          type: boolean
+          description: Whether Twilio is connected for this organization
+        accountSidMask:
+          type: string
+          description: Masked Account SID for display e.g. AC****...xyz (when connected)
+
+    ConnectTwilioPayload:
+      type: object
+      description: |
+        At least one of `messagingServiceSid` or `defaultFromPhone` is required (Twilio Messages API requires a From).
+        If both are sent, Messaging Service SID is used as From when sending.
+      required:
+        - accountSid
+        - authToken
+      properties:
+        accountSid:
+          type: string
+          description: Twilio Account SID
+        authToken:
+          type: string
+          description: Twilio Auth Token
+        messagingServiceSid:
+          type: string
+          description: Messaging Service SID (MG...) to use as From; optional if defaultFromPhone is set
+        defaultFromPhone:
+          type: string
+          description: E.164 phone number to use as From; optional if messagingServiceSid is set
+
+    TwilioConnectResult:
+      type: object
+      required:
+        - accountSidMask
+      properties:
+        accountSidMask:
+          type: string
+          description: Masked Account SID for display
+
+    TestTwilioPayload:
+      type: object
+      required:
+        - to
+      properties:
+        to:
+          type: string
+          description: E.164 phone number to send test SMS to
+
+    DashboardResponse:
+      type: object
+      required:
+        - summary
+        - needsAttention
+        - eventVolumeLast24h
+        - recentActivity
+      properties:
+        summary:
+          $ref: '#/components/schemas/DashboardSummary'
+        needsAttention:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/DashboardNeedsAttentionItem'
+        eventVolumeLast24h:
+          type: integer
+          minimum: 0
+          description: Total events ingested in the last 24h (today UTC)
+        recentActivity:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardRecentActivityItem'
+
+    DashboardSummary:
+      type: object
+      required:
+        - activeAlertsLast24h
+        - jobs
+        - apiHealth
+        - errorLogsLast1h
+      properties:
+        activeAlertsLast24h:
+          type: integer
+          minimum: 0
+          description: Count of currently triggered alert rules
+        jobs:
+          $ref: '#/components/schemas/DashboardJobsSummary'
+        apiHealth:
+          $ref: '#/components/schemas/DashboardApiHealthSummary'
+        errorLogsLast1h:
+          type: integer
+          minimum: 0
+          description: Count of error-level logs in the last 1 hour
+
+    DashboardJobsSummary:
+      type: object
+      required:
+        - total
+        - up
+        - down
+        - degraded
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        up:
+          type: integer
+          minimum: 0
+        down:
+          type: integer
+          minimum: 0
+        degraded:
+          type: integer
+          minimum: 0
+
+    DashboardApiHealthSummary:
+      type: object
+      required:
+        - errorRatePercent
+        - windowMinutes
+      properties:
+        errorRatePercent:
+          type: number
+          minimum: 0
+          description: Error rate (0-100) in the window
+        windowMinutes:
+          type: integer
+          description: Window length in minutes (e.g. 15)
+
+    DashboardNeedsAttentionItem:
+      type: object
+      required:
+        - type
+        - name
+        - status
+        - since
+        - severity
+      properties:
+        type:
+          type: string
+          enum: [job, api, alert]
+        name:
+          type: string
+        status:
+          type: string
+        since:
+          type: string
+          format: date-time
+        severity:
+          type: string
+          enum: [critical, high, medium, info]
+
+    DashboardRecentActivityItem:
+      type: object
+      required:
+        - type
+        - message
+        - at
+        - severity
+      properties:
+        type:
+          type: string
+          enum: [job, alert, log]
+        message:
+          type: string
+        at:
+          type: string
+          format: date-time
+        severity:
+          type: string
+          enum: [critical, high, medium, info]
+
+    PulsePayload:
+      type: object
+      additionalProperties: true
+      description: |
+        Pulse event payload. Can be any valid JSON object.
+        If a "timestamp" property is present (ISO 8601 RFC3339 format), it is treated as the client event time.
+        The server records its own receive time separately for processing/ordering.
+        Maximum size is 4KB when serialized.
+      example:
+        timestamp: "2025-01-01T12:00:00Z"
+        status: "ok"
+        durationMs: 1234
+        metrics:
+          cpu: 45.2
+          memory: 1024
+
+    PulseAcceptedResponse:
+      type: object
+      required:
+        - status
+        - eventId
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+          description: Ingestion status
+          example: accepted
+        eventId:
+          type: string
+          description: Unique event identifier for tracking
+          example: evt_clr12345abc
+
+    ApiMonitoringEventListItem:
+      type: object
+      description: One recent API call (method, url, service name, date, status code, response time ms). No request/response bodies.
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Unique event identifier
+        serviceName:
+          type: string
+          description: Service name (e.g. stripe, ticketmaster)
+          example: stripe
+        method:
+          type: string
+          description: HTTP method (GET, POST, etc.)
+          example: GET
+        url:
+          type: string
+          example: https://api.stripe.com/v1/charges
+        statusCode:
+          type: integer
+          format: int32
+          description: HTTP status code of the response
+          example: 200
+        latencyMs:
+          type: integer
+          format: int32
+          nullable: true
+          description: Response time in milliseconds
+        receivedAt:
+          type: string
+          format: date-time
+          description: Date/time of the call (UTC)
+
+    ApiMonitoringListResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiMonitoringEventListItem'
+        nextCursor:
+          type: string
+          description: When present, pass as cursor query param for the next page. Omitted when no more results.
+
+    Log:
+      type: object
+      description: A single log event (id, message, status, source, date, payload, etc.)
+      required:
+        - id
+        - message
+        - status
+        - receivedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Log event ID (event_id from ingestion)
+        message:
+          type: string
+          description: Log message
+        status:
+          type: string
+          enum: [debug, info, warn, error]
+          description: Log level (status)
+        source:
+          type: string
+          nullable: true
+          description: Optional source identifier
+        receivedAt:
+          type: string
+          format: date-time
+          description: When the log was received by the server (UTC)
+        clientTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Client-provided timestamp if sent at ingestion
+        payload:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: Additional attributes (JSON object from ingestion)
+        jobId:
+          type: string
+          nullable: true
+          description: Optional job identifier from ingestion
+
+    LogListResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Log'
+        pagination:
+          $ref: '#/components/schemas/OffsetPagination'
+          description: Offset-based pagination metadata
+
+    LogTimelineCounts:
+      type: object
+      description: Per-status counts for one time bucket (for stacked bar chart)
+      properties:
+        debug:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of debug-level logs
+        info:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of info-level logs
+        warn:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of warn-level logs
+        error:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of error-level logs
+
+    LogTimelineBucket:
+      type: object
+      description: One time bucket with counts per status
+      required:
+        - bucket
+        - counts
+      properties:
+        bucket:
+          type: string
+          format: date-time
+          description: Start of the time interval (e.g. 13:00 for 13:00–14:00)
+        counts:
+          $ref: '#/components/schemas/LogTimelineCounts'
+
+    LogTimelineResponse:
+      type: object
+      required:
+        - buckets
+      properties:
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogTimelineBucket'
+          description: Time-ordered buckets for the chart
+
+    ApiMonitoringServiceSummaryItem:
+      type: object
+      description: One row in the list of services (service name, total calls, errors, error rate, latency). Use displayName for UI label; use serviceName for linking to service detail.
+      required:
+        - serviceName
+        - totalCalls
+        - errors
+        - errorRate
+      properties:
+        displayName:
+          type: string
+          description: Human-friendly name for the API (e.g. Stripe, Ticketmaster). Use for list labels.
+          example: Stripe
+        serviceName:
+          type: string
+          description: Service identifier; use for links to service detail endpoint
+          example: stripe
+        totalCalls:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Total number of API calls
+        errors:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of calls with HTTP status >= 400
+        errorRate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Error rate (errors / totalCalls, 0 to 1)
+        avgLatencyMs:
+          type: number
+          format: float
+          nullable: true
+          description: Average latency (response time) in milliseconds; null if no latency data
+
+    ApiMonitoringServiceEndpointItem:
+      type: object
+      description: One endpoint (method + URL) for a service with aggregate counts in the time range.
+      required:
+        - method
+        - url
+        - totalCalls
+        - errors
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Event ID of the most recent call for this endpoint; use to link to /api-monitoring/{eventId}/details
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        method:
+          type: string
+          description: HTTP method
+          example: GET
+        url:
+          type: string
+          description: Endpoint URL
+          example: https://api.stripe.com/v1/charges
+        totalCalls:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Total calls in the time range
+        errors:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of calls with status >= 400 in the time range
+        avgLatencyMs:
+          type: number
+          format: float
+          nullable: true
+          description: Average latency in ms in the time range; null if no latency data
+
+    ApiMonitoringServiceDetail:
+      type: object
+      description: Detail view for one service (cursor-paginated endpoints/URLs with counts). Returned when user clicks a service.
+      required:
+        - displayName
+        - serviceName
+        - endpoints
+      properties:
+        displayName:
+          type: string
+          description: Human-friendly name for the API (e.g. Stripe, Ticketmaster)
+          example: Stripe
+        serviceName:
+          type: string
+          description: Service identifier
+          example: stripe
+        endpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiMonitoringServiceEndpointItem'
+          description: Endpoints (method + URL) for this service for the current page
+        nextCursor:
+          type: string
+          description: When present, pass as cursor query param to fetch the next page. Omitted when no more results.
+
+    ApiMonitoringServiceNamesResponse:
+      type: object
+      required:
+        - serviceNames
+      properties:
+        serviceNames:
+          type: array
+          items:
+            type: string
+          description: List of distinct service names for the project, ordered alphabetically
+          example: ["stripe", "ticketmaster", "twilio"]
+
+    ApiMonitoringSummaryResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiMonitoringServiceSummaryItem'
+
+    ApiMonitoringEndpointDetail:
+      type: object
+      description: Detailed view for one endpoint (latest call + 24h aggregates and errors time series).
+      required:
+        - serviceName
+        - method
+        - url
+      properties:
+        serviceName:
+          type: string
+          description: Service this endpoint belongs to
+        method:
+          type: string
+          description: HTTP method
+        url:
+          type: string
+          description: Endpoint URL
+        latestStatusCode:
+          type: integer
+          format: int32
+          nullable: true
+          description: HTTP status code of the most recent call
+        latencyMs:
+          type: integer
+          format: int32
+          nullable: true
+          description: Latency in ms of the most recent call
+        latencyLast24h:
+          type: number
+          format: float
+          nullable: true
+          description: Average latency in ms over the last 24 hours
+        errorsLast24h:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of calls with status >= 400 in the last 24 hours
+        errorsTimeSeries:
+          type: array
+          description: Per-bucket error counts for graphing (e.g. hourly)
+          items:
+            $ref: '#/components/schemas/ApiMonitoringErrorsBucket'
+        latencyTimeSeries:
+          type: array
+          description: Per-bucket average latency for graphing (e.g. hourly)
+          items:
+            $ref: '#/components/schemas/ApiMonitoringLatencyBucket'
+        request:
+          type: string
+          description: Latest request body or headers (JSON string)
+          example: '{}'
+        response:
+          type: string
+          description: Latest response body (JSON string)
+          example: '{}'
+
+    ApiMonitoringErrorsBucket:
+      type: object
+      description: One time bucket for errors-over-time graph.
+      required:
+        - bucket
+        - errors
+      properties:
+        bucket:
+          type: string
+          format: date-time
+          description: Start of the time bucket (e.g. hour)
+        errors:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Error count in this bucket
+
+    ApiMonitoringLatencyBucket:
+      type: object
+      description: One time bucket for latency-over-time graph.
+      required:
+        - bucket
+        - avgLatencyMs
+      properties:
+        bucket:
+          type: string
+          format: date-time
+          description: Start of the time bucket (e.g. hour)
+        avgLatencyMs:
+          type: number
+          format: float
+          description: Average latency in ms for this bucket
+
+    ApiMonitoringPayload:
+      type: object
+      required:
+        - serviceName
+        - method
+        - url
+        - statusCode
+      properties:
+        serviceName:
+          type: string
+          description: Name of the service or client making the call (e.g. ticketmaster, stripe).
+          example: stripe
+        method:
+          type: string
+          description: HTTP method (GET, POST, PUT, PATCH, DELETE, etc.).
+          example: GET
+        url:
+          type: string
+          description: Full or normalized URL of the outbound request.
+          example: https://api.stripe.com/v1/charges
+        statusCode:
+          type: integer
+          format: int32
+          description: HTTP status code of the response.
+          example: 200
+        request:
+          type: object
+          description: Request body or headers (truncated by processing if needed).
+          additionalProperties: true
+        response:
+          type: object
+          description: Response body (truncated by processing if needed).
+          additionalProperties: true
+        meta:
+          type: object
+          description: Optional metadata (tags, correlation id, etc.).
+          additionalProperties: true
+        latencyMs:
+          type: integer
+          format: int32
+          description: Measured latency in milliseconds.
+          example: 150
+        errorMessage:
+          type: string
+          nullable: true
+          description: Error message if the call failed.
+
+    ApiMonitoringPayloadBatch:
+      type: array
+      items:
+        $ref: '#/components/schemas/ApiMonitoringPayload'
+      description: Batch of API monitoring events (same shape as single payload).
+      minItems: 1
+
+    ApiMonitoringAcceptedResponse:
+      type: object
+      required:
+        - status
+        - eventId
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+          description: Ingestion status
+          example: accepted
+        eventId:
+          type: string
+          description: Unique event identifier for tracking (first event when batch)
+          example: evt_clr12345abc
+        eventIds:
+          type: array
+          items:
+            type: string
+          description: Event IDs in the same order as the request (single or batch)
+          example: ["evt_clr12345abc"]
+
+    IngestionLogsRequestBody:
+      description: |
+        Request body for POST /ingestion/logs. Supports a single log object or a batch array of log objects.
+        Each item accepts either structured (level + message) or raw (rawLog).
+      oneOf:
+        - $ref: '#/components/schemas/LogsPayload'
+        - type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LogsPayload'
+
+    LogsPayload:
+      type: object
+      required:
+        - level
+        - message
+      description: Structured log ingestion. level and message are required; other fields optional.
+      properties:
+        level:
+          type: string
+          enum: [debug, info, warn, error]
+          description: Log level.
+          example: info
+        message:
+          type: string
+          description: Log message body.
+          example: "Job completed successfully"
+        timestamp:
+          type: string
+          format: date-time
+          description: Client-side event time (RFC3339). Optional; server receive time is used if omitted.
+        attributes:
+          type: object
+          additionalProperties: true
+          description: Optional key-value attributes (e.g. trace_id, code, duration_ms).
+        jobId:
+          type: string
+          description: External job ID if the log is emitted from a job (must belong to the API key's project).
+          example: job_abc123
+        source:
+          type: string
+          description: Source identifier (e.g. service name, component).
+          example: worker
+
+    LogsAcceptedResponse:
+      type: object
+      required:
+        - status
+        - eventId
+        - eventIds
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+          description: Ingestion status
+          example: accepted
+        eventId:
+          type: string
+          description: Unique event identifier for tracking (first event when batch)
+          example: evt_clr12345abc
+        eventIds:
+          type: array
+          items:
+            type: string
+          description: Event IDs in the same order as the request (single or batch)
+          example: ["evt_clr12345abc"]
+
+    CreateJobPayload:
+      type: object
+      required:
+        - projectId
+        - name
+        - expectedIntervalMs
+        - gracePeriodMs
+      properties:
+        projectId:
+          type: string
+          description: Project identifier
+          example: proj_456def
+        name:
+          type: string
+          description: Job display name
+          example: My Background Job
+        description:
+          type: string
+          nullable: true
+          description: Optional job description
+          example: Refreshes the database
+        expectedIntervalMs:
+          type: integer
+          format: int64
+          description: Expected interval between pulses, in milliseconds
+          example: 60000
+        gracePeriodMs:
+          type: integer
+          format: int64
+          description: Grace period in milliseconds for missed pulse before marking job as late/unhealthy
+          example: 30000
+
+    UpdateJobPayload:
+      type: object
+      properties:
+        name:
+          type: string
+          description: New job name/title
+          example: "New Title"
+        description:
+          type: string
+          nullable: true
+          description: Job description
+          example: "Updated job description"
+        expectedIntervalMs:
+          type: integer
+          format: int64
+          description: Expected pulse interval in ms
+          example: 120000
+        gracePeriodMs:
+          type: integer
+          format: int64
+          description: Grace period in ms
+          example: 60000
+        operationalStatus:
+          type: string
+          enum: [active, inactive]
+          description: Operational status
+          example: "inactive"
+
+    Job:
+      type: object
+      required:
+        - id
+        - orgId
+        - projectId
+        - name
+        - operationalStatus
+        - healthStatus
+        - expectedIntervalMs
+        - gracePeriodMs
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: Job ID (UUID, for use in API paths)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        externalId:
+          type: string
+          description: External identifier for SDK/pulse ingestion
+          example: job_123abc
+        orgId:
+          type: string
+          description: Organization identifier
+          example: org_123abc
+        projectId:
+          type: string
+          description: Project identifier
+          example: proj_456def
+        name:
+          type: string
+          description: Job display name
+          example: My Background Job
+        description:
+          type: string
+          nullable: true
+          description: Optional job description
+          example: Refreshes the database
+        operationalStatus:
+          type: string
+          enum: [active, inactive]
+          description: Operational status
+          example: "inactive"
+        healthStatus:
+          type: string
+          enum: [unknown, up, down, degraded]
+          description: Health status
+          example: "up"
+        lastPulseAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last pulse timestamp (RFC3339). Null if job has never received a pulse.
+          example: "2024-06-18T16:00:00Z"
+        expectedIntervalMs:
+          type: integer
+          format: int64
+          description: Expected interval between pulses, in milliseconds
+          example: 60000
+        uptimePct:
+          type: number
+          format: float
+          nullable: true
+          description: Uptime percentage over the last 24 hours (0-100). Null if insufficient history.
+        failureStreak:
+          type: integer
+          format: int64
+          description: Number of consecutive evaluations where the job was down. Always 0 when no data, healthy, or unknown. Stored in cache, not persisted.
+        totalEvents:
+          type: integer
+          format: int64
+          description: Total number of pulse events received
+        uptimeGraph:
+          type: array
+          nullable: true
+          description: Health status history for the uptime graph (oldest first). Last 24h or up to 96 points.
+          items:
+            $ref: '#/components/schemas/UptimeGraphPoint'
+        gracePeriodMs:
+          type: integer
+          format: int64
+          description: Grace period in milliseconds for missed pulse before marking job as late/unhealthy
+          example: 30000
+        apiKey:
+          type: string
+          description: |
+            Store this securely as it cannot be retrieved later.
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+
+    UptimeGraphPoint:
+      type: object
+      required:
+        - at
+        - status
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: Evaluation time (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+        status:
+          type: string
+          enum: [unknown, up, down, degraded]
+          description: Health status at this time
+
+    PulsesListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Pulse'
+          description: Array of pulse events
+        pagination:
+          $ref: '#/components/schemas/CursorPagination'
+
+    Pulse:
+      type: object
+      required:
+        - id
+        - payload
+        - receivedAt
+      properties:
+        id:
+          type: string
+          description: Unique pulse identifier
+          example: pulse_123abc
+        payload:
+          type: object
+          additionalProperties: true
+          description: Pulse payload (any valid JSON)
+          example:
+            status: "ok"
+            durationMs: 1234
+            metrics:
+              cpu: 45.2
+              memory: 1024
+        receivedAt:
+          type: string
+          format: date-time
+          description: Server timestamp when pulse was received (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+
+    JobsOverviewSummary:
+      type: object
+      required:
+        - up
+        - down
+        - degraded
+        - total
+      properties:
+        up:
+          type: integer
+          description: Number of jobs with health status up
+        down:
+          type: integer
+          description: Number of jobs with health status down
+        degraded:
+          type: integer
+          description: Number of jobs with health status degraded
+        total:
+          type: integer
+          description: Total number of jobs
+
+    JobsListResponse:
+      type: object
+      required:
+        - data
+        - overview
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobListItem'
+          description: Array of job items
+        overview:
+          $ref: '#/components/schemas/JobsOverviewSummary'
+        pagination:
+          $ref: '#/components/schemas/OffsetPagination'
+    
+    JobListItem:
+      type: object
+      required:
+        - id
+        - orgId
+        - projectId
+        - name
+        - operationalStatus
+        - healthStatus
+        - expectedIntervalMs
+        - gracePeriodMs
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: Job ID (UUID, for use in API paths)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        externalId:
+          type: string
+          description: External identifier for SDK/pulse ingestion
+          example: job_123abc
+        orgId:
+          type: string
+          description: Organization identifier
+          example: org_123abc
+        projectId:
+          type: string
+          description: Project identifier
+          example: proj_456def
+        name:
+          type: string
+          description: Job display name
+          example: My Background Job
+        description:
+          type: string
+          nullable: true
+          description: Optional job description
+          example: Refreshes the database
+        lastPulsesStatus:
+          type: array
+          items:
+            type: string
+            enum: [unknown, up, down, degraded]
+          description: Last 5 health status evaluations (oldest first, for bar display)
+        operationalStatus:
+          type: string
+          enum: [active, inactive]
+          description: Operational status
+          example: "active"
+        healthStatus:
+          type: string
+          enum: [unknown, up, down, degraded]
+          description: Health status
+          example: "up"
+        lastPulseAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last pulse timestamp (RFC3339). Null if job has never received a pulse.
+          example: "2024-06-18T16:00:00Z"
+        failureStreak:
+          type: integer
+          format: int64
+          description: Number of consecutive evaluations where the job was down. Always 0 when no data, healthy, or unknown.
+        expectedIntervalMs:
+          type: integer
+          format: int64
+          description: Expected interval between pulses, in milliseconds
+          example: 60000
+        gracePeriodMs:
+          type: integer
+          format: int64
+          description: Grace period in milliseconds for missed pulse before marking job as late/unhealthy
+          example: 30000
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp (RFC3339)
+          example: "2024-06-18T16:00:00Z"
+    
+    OffsetPagination:
+      type: object
+      properties:
+        sort:
+          type: string
+          description: Sort field in the format - sort=field1
+        limit:
+          type: integer
+          description: A limit on the number of objects to be returned
+        offset:
+          type: integer
+        page:
+          type: integer
+          description: Current page you're on
+        totalPages:
+          type: integer
+          description: Number of total pages
+        totalEntriesSize:
+          type: integer
+          description: Total potential records matching the query
+        currentEntriesSize:
+          type: integer
+          description: Total records returned, will be <= Limit
+      required:
+        - sort
+        - limit
+        - offset
+        - page
+        - totalPages
+        - totalEntriesSize
+        - currentEntriesSize
+
+    CursorPagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          description: Maximum number of objects requested
+          example: 50
+        nextCursor:
+          type: string
+          nullable: true
+          description: Cursor for fetching the next page (null if no more results)
+          example: "eyJyZWNlaXZlZEF0IjoiMjAyNC0wNi0xOFQxNjowMDowMFoifQ=="
+      required:
+        - limit
+    
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - slug
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: invalid
+        slug:
+          type: string
+          description: Client-friendly error identifier
+          example: invalid-email
+        message:
+          type: string
+          description: Human-readable error message
+          example: The provided email address is invalid
+
+    AlertRuleSubscriptionUser:
+      type: object
+      description: User reference in a subscription (response only).
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User ID
+        name:
+          type: string
+          description: User display name
+
+    AlertRuleSubscriptionResponse:
+      type: object
+      description: Subscription in alert rule response; includes users with id and name.
+      required:
+        - channel
+      properties:
+        channel:
+          type: string
+          enum: [email, sms, slack]
+          description: Delivery channel (uses org integration for that channel)
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertRuleSubscriptionUser'
+          description: Users subscribed via this channel (email/sms only; empty for slack)
+        slackChannels:
+          type: array
+          items:
+            type: string
+          description: Slack channel names (slack only; empty for email/sms)
+
+    AlertRuleSubscription:
+      type: object
+      description: |
+        A subscription to an alert rule via a specific channel (request body for create/update).
+        - For email/sms: userIds is required, slackChannels must be omitted or empty
+        - For slack: slackChannels is required, userIds must be omitted or empty
+      required:
+        - channel
+      properties:
+        channel:
+          type: string
+          enum: [email, sms, slack]
+          description: Delivery channel (uses org integration for that channel)
+        userIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          description: List of user IDs that will receive notifications via this channel (required for email/sms, must be omitted for slack)
+          example: ["550e8400-e29b-41d4-a716-446655440000", "660e8400-e29b-41d4-a716-446655440001"]
+        slackChannels:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: List of Slack channel names (required for slack, must be omitted for email/sms)
+          example: ["#alerts", "#ops"]
+
+    JobAlertConditionPayload:
+      type: object
+      description: |
+        Condition fields for job alert rules.
+        - job_health: use newStatusFilters and previousStatusFilters. Empty filter means "any status".
+        - job_no_pulse: use noPulseAfterSeconds.
+      properties:
+        newStatusFilters:
+          type: array
+          items:
+            type: string
+            enum: [up, down, degraded, unknown]
+          description: job_health — alert when the new health status matches one of these (empty = any)
+          example: ["down", "degraded"]
+        previousStatusFilters:
+          type: array
+          items:
+            type: string
+            enum: [up, down, degraded, unknown]
+          description: job_health — alert only when the previous health status matches one of these (empty = any)
+          example: ["up"]
+        noPulseAfterSeconds:
+          type: integer
+          minimum: 1
+          description: job_no_pulse — alert when no heartbeat received for this many seconds (e.g. 600 = 10 min)
+          example: 600
+
+    APIAlertConditionPayload:
+      type: object
+      required:
+        - comparator
+        - threshold
+        - serviceName
+      description: Condition fields for API monitoring alert rules (api_error_rate, api_latency).
+      properties:
+        serviceName:
+          type: string
+          description: Scope to this service (e.g. stripe). Required for API monitoring alerts. Empty = all services.
+          example: "Stripe"
+        comparator:
+          type: string
+          enum: [">", ">=", "<", "<=", "=="]
+          description: Comparison operator applied to the metric value against the threshold
+        threshold:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+          description: Threshold value to compare the metric against (error rate as 0–1 for api_error_rate; milliseconds for api_latency)
+          example: 0.05
+        windowSeconds:
+          type: integer
+          minimum: 300
+          description: Evaluation window in seconds (default 300, minimum 300)
+          example: 300
+        minCount:
+          type: integer
+          minimum: 1
+          description: Minimum number of requests in the window required to evaluate the rule (prevents false positives on low traffic)
+          example: 10
+
+    LogAlertConditionPayload:
+      type: object
+      required:
+        - logSourceFilter
+      description: |
+        Condition fields for log alert rules.
+        - log_error_count: use comparator, threshold, windowSeconds, minCount. Optionally messagePattern.
+        - log_error_rate: same as log_error_count.
+        - log_absence: use noPulseAfterSeconds. logSourceFilter is still required.
+      properties:
+        logSourceFilter:
+          type: string
+          minLength: 1
+          description: Scopes the rule to logs from this source value (required for all log rules)
+          example: "my-service"
+        comparator:
+          type: string
+          enum: [">", ">=", "<", "<=", "=="]
+          description: log_error_count / log_error_rate — comparison operator
+        threshold:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+          description: log_error_count — absolute count threshold; log_error_rate — rate as 0–1 (e.g. 0.1 = 10%)
+          example: 0.1
+        windowSeconds:
+          type: integer
+          minimum: 300
+          description: log_error_count / log_error_rate — evaluation window in seconds (default 300, minimum 300)
+          example: 300
+        minCount:
+          type: integer
+          minimum: 1
+          description: Minimum total log count in the window required to evaluate the rule
+          example: 5
+        absenceSeconds:
+          type: integer
+          minimum: 1
+          description: log_absence — alert when no logs received from this source for this many seconds
+          example: 1800
+        messagePattern:
+          type: string
+          nullable: true
+          description: Optional RE2 regex matched against the log message. When set, pattern_count is used instead of error_count/error_rate. Validated at creation time.
+          example: "panic|fatal"
+
+    AlertConditionPayload:
+      type: object
+      description: |
+        Union of all condition fields across all rule types. Used in rule responses.
+        Only the fields relevant to the rule's type will be populated.
+      properties:
+        serviceName:
+          type: string
+          description: API monitoring only — scope to this service (empty = all services)
+        comparator:
+          type: string
+          enum: [">", ">=", "<", "<=", "=="]
+        threshold:
+          type: number
+          format: double
+        windowSeconds:
+          type: integer
+        minCount:
+          type: integer
+        newStatusFilters:
+          type: array
+          items:
+            type: string
+            enum: [up, down, degraded, unknown]
+        previousStatusFilters:
+          type: array
+          items:
+            type: string
+            enum: [up, down, degraded, unknown]
+        noPulseAfterSeconds:
+          type: integer
+          minimum: 1
+        absenceSeconds:
+          type: integer
+          minimum: 1
+        logSourceFilter:
+          type: string
+        messagePattern:
+          type: string
+          nullable: true
+
+    CreateJobAlertPayload:
+      type: object
+      required:
+        - name
+        - type
+        - condition
+        - subscriptions
+      properties:
+        name:
+          type: string
+          description: Human-readable rule name
+          example: "Alert Name"
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+        type:
+          type: string
+          enum: [job_health, job_no_pulse]
+          description: Alert type; determines which condition fields are used
+        condition:
+          $ref: '#/components/schemas/JobAlertConditionPayload'
+        subscriptions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AlertRuleSubscription'
+          description: Who to notify and via which channel. Each item is one channel; for email/sms use userIds only, for slack use slackChannels only.
+          example:
+            - channel: email
+              userIds:
+                - "550e8400-e29b-41d4-a716-446655440000"
+                - "660e8400-e29b-41d4-a716-446655440001"
+            - channel: slack
+              slackChannels:
+                - "#alerts"
+                - "#ops"
+        isActive:
+          type: boolean
+          default: true
+          description: Whether the rule is active
+    
+    CreateAPIMonitoringAlertPayload:
+      type: object
+      required:
+        - name
+        - type
+        - condition
+        - subscriptions
+      properties:
+        name:
+          type: string
+          description: Human-readable rule name
+          example: "Alert Name"
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+        type:
+          type: string
+          enum: [api_error_rate, api_latency]
+          description: Alert type; determines which condition fields are used
+        condition:
+          $ref: '#/components/schemas/APIAlertConditionPayload'
+        subscriptions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AlertRuleSubscription'
+          description: Who to notify and via which channel. Each item is one channel; for email/sms use userIds only, for slack use slackChannels only.
+          example:
+            - channel: email
+              userIds:
+                - "550e8400-e29b-41d4-a716-446655440000"
+                - "660e8400-e29b-41d4-a716-446655440001"
+            - channel: slack
+              slackChannels:
+                - "#alerts"
+                - "#ops"
+        isActive:
+          type: boolean
+          default: true
+          description: Whether the rule is active
+
+    UpdateJobAlertPayload:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [job_health, job_no_pulse]
+        condition:
+          $ref: '#/components/schemas/JobAlertConditionPayload'
+        subscriptions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AlertRuleSubscription'
+        isActive:
+          type: boolean
+
+    UpdateAPIMonitoringAlertPayload:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [api_error_rate, api_latency]
+        condition:
+          $ref: '#/components/schemas/APIAlertConditionPayload'
+        subscriptions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AlertRuleSubscription'
+        isActive:
+          type: boolean
+
+    CreateLogAlertPayload:
+      type: object
+      required:
+        - name
+        - type
+        - condition
+        - subscriptions
+      properties:
+        name:
+          type: string
+          description: Human-readable rule name
+          example: "High error rate alert"
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+        type:
+          type: string
+          enum: [log_error_count, log_error_rate, log_absence]
+          description: Log alert type
+        condition:
+          $ref: '#/components/schemas/LogAlertConditionPayload'
+        subscriptions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AlertRuleSubscription'
+          description: Who to notify and via which channel.
+        isActive:
+          type: boolean
+          default: true
+          description: Whether the rule is active
+
+    UpdateLogAlertPayload:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [log_error_count, log_error_rate, log_absence]
+        condition:
+          $ref: '#/components/schemas/LogAlertConditionPayload'
+        subscriptions:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AlertRuleSubscription'
+        isActive:
+          type: boolean
+
+    AlertRule:
+      type: object
+      description: Alert rule response (same shape as create/update plus id and timestamps).
+      required:
+        - id
+        - name
+        - type
+        - condition
+        - subscriptions
+        - isActive
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Alert rule ID
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [job_health, job_no_pulse, api_error_rate, api_latency, log_error_count, log_error_rate, log_absence]
+        condition:
+          $ref: '#/components/schemas/AlertConditionPayload'
+        subscriptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertRuleSubscriptionResponse'
+        isActive:
+          type: boolean
+        triggeredAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last time the rule triggered
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AlertRulesListResponse:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertRule'
+
+    AlertLog:
+      type: object
+      description: Alert log entry (id, message, evaluatedAt only).
+      required:
+        - id
+        - message
+        - evaluatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Alert log ID
+        message:
+          type: string
+          description: Alert message
+        evaluatedAt:
+          type: string
+          format: date-time
+          description: When the alert was evaluated
+
+    AlertLogsListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlertLog'
+        pagination:
+          $ref: '#/components/schemas/CursorPagination'
+
+    Notification:
+      type: object
+      description: Org/project-level notification with optional per-user read timestamp.
+      required:
+        - id
+        - type
+        - eventType
+        - eventSubType
+        - message
+        - metadata
+        - createdAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Notification ID
+        type:
+          type: string
+          enum: [INFO, WARN, CRITICAL]
+          description: Notification type/level (INFO, WARN, CRITICAL)
+        eventType:
+          type: string
+          description: High-level notification type (e.g. alert, billing)
+        eventSubType:
+          type: string
+          description: More specific subtype (e.g. job_health, api_monitoring)
+        message:
+          type: string
+          description: Plain-text message
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Arbitrary metadata (entity IDs, extra context)
+        createdAt:
+          type: string
+          format: date-time
+          description: When the notification was created
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the current user marked this notification as read (null if unread)
+
+    NotificationsListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        pagination:
+          $ref: '#/components/schemas/CursorPagination'
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            code: invalid
+            slug: invalid-request
+            message: The request is invalid
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            code: not_found
+            slug: resource-not-found
+            message: The requested resource was not found
+
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            code: conflict
+            slug: resource-conflict
+            message: The resource already exists
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            code: internal
+            slug: internal-server-error
+            message: Internal error
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            code: unauthorized
+            slug: authentication-required
+            message: Authentication required
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            code: forbidden
+            slug: authorization-failed
+            message: You do not have permission to perform this action
+
+    TooManyRequests:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+          example:
+            code: too_many_requests
+            slug: rate-limit-exceeded
+            message: Rate limit exceeded
