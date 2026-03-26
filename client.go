@@ -15,7 +15,7 @@ const (
 	defaultBaseURL      = "https://api.postghost.dev/api/v1"
 	defaultLocalBaseURL = "http://localhost:8080/api/v1"
 	defaultTimeout      = 30 * time.Second
-	defaultSDKName      = "go"
+	defaultSDKName      = "golang"
 	defaultSDKVersion   = "1.0.0"
 )
 

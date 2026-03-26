@@ -46,6 +46,10 @@ Use local mode:
 client, err := postghost.NewClient("pgk_xxx", true) // true => http://localhost:8080/api/v1
 ```
 
+SDK metadata headers are set automatically by this SDK on every request:
+- `X-PostGhost-SDK-Name`
+- `X-PostGhost-SDK-Version`
+
 ## Available Methods
 
 - `IngestPulse(ctx, externalID, payload)`
