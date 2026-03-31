@@ -46,6 +46,12 @@ Use local mode:
 client, err := postghost.NewClient("pgk_xxx", true) // true => http://localhost:8080/api/v1
 ```
 
+On client initialization, the SDK performs an auth check:
+
+- Sends `GET /auth-check` to the configured base URL.
+- Expects HTTP 204 when the API key is valid.
+- For 4xx responses with a JSON body containing `message`, the constructor returns an error and no client is created.
+
 SDK metadata headers are set automatically by this SDK on every request:
 - `X-PostGhost-SDK-Name`
 - `X-PostGhost-SDK-Version`

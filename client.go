@@ -39,13 +39,22 @@ func NewClient(apiKey string, useLocal bool) (*Client, error) {
 
 	httpClient := &http.Client{Timeout: defaultTimeout}
 
-	return &Client{
+	c := &Client{
 		apiKey:     apiKey,
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		httpClient: httpClient,
 		sdkName:    defaultSDKName,
 		sdkVersion: defaultSDKVersion,
-	}, nil
+	}
+
+	// Validate API key via /auth-check before returning a usable client.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := c.authCheck(ctx); err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 func (c *Client) IngestPulse(ctx context.Context, externalID string, payload *PulsePayload) (*PulseAcceptedResponse, error) {
@@ -92,6 +101,14 @@ func (c *Client) IngestLogsBatch(ctx context.Context, payloads []LogsPayload) (*
 		}
 	}
 	return doJSON[LogsAcceptedResponse](ctx, c, http.MethodPost, "/ingestion/logs", payloads)
+}
+
+// authCheck calls /auth-check and expects a 204 response for a valid API key.
+// Any non-2xx status results in an error (APIError) and the client will not be returned.
+func (c *Client) authCheck(ctx context.Context) error {
+	// We don't expect any body on success; zero value struct{} is fine.
+	_, err := doJSON[struct{}](ctx, c, http.MethodGet, "/auth-check", nil)
+	return err
 }
 
 func doJSON[T any](ctx context.Context, c *Client, method, path string, body any) (*T, error) {
