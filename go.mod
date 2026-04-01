@@ -1,3 +1,3 @@
-module github.com/postghost/postghost-go
+module github.com/Post-Ghost/postghost-sdk-go
 
 go 1.26

@@ -5,7 +5,7 @@ Typed Go SDK for PostGhost ingestion endpoints.
 ## Install
 
 ```bash
-go get github.com/postghost/postghost-go
+go get github.com/Post-Ghost/postghost-sdk-go
 ```
 
 ## Initialize Client
@@ -17,7 +17,7 @@ import (
 	"context"
 	"log"
 
-	postghost "github.com/postghost/postghost-go"
+	postghost "github.com/Post-Ghost/postghost-sdk-go"
 )
 
 func main() {
